@@ -57,13 +57,6 @@ class Renderer:
         pygame.display.flip()
 
 
-    def testRender(self):
-        self.setPixel(0, 0)
-        self.setPixel(4, 4)
-        self.render()
-
-
-
 class Chip8:
 
     def __init__(self, renderer):
