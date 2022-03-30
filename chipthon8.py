@@ -227,11 +227,11 @@ class Chip8:
                 self.memory[self.index + 2] = int(self.v[x] % 10)
             elif byte == 0x55:
                 # LD [I], Vx
-                for i in range(x + 1):
+                for i in range(x + 1): # saves memory from index to x with registers 0 to x
                     self.memory[self.index + i] = self.v[i]
             elif byte == 0x65:
                 # LD Vx, [I]
-                for i in range(x + 1):
+                for i in range(x + 1): # loads registers from 0 to x with memory from index to x
                     self.v[i] = self.memory[self.index + i]
             else:
                 sys.exit('Bad instruction: ' + str(instruction))
