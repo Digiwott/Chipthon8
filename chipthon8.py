@@ -4,13 +4,69 @@ import sys
 import pygame
 
 class Renderer:
-    # TODO
-    dummy = 1
+
+    def __init__(self):
+        # display size
+        self.cols = 64
+        self.rows = 32
+
+        # screen info and scale
+        self.display = [0] * self.cols * self.rows
+        self.scale = 15
+
+        # window
+        self.width = self.cols * self.scale
+        self.height = self.rows * self.scale
+        self.window = pygame.display.set_mode((self.width, self.height))
+        pygame.display.flip()
+
+    
+    # sets a pixel on the display and returns if that pixel was already set or not
+    def setPixel(self, x, y):
+        if x > self.cols:
+            x -= self.cols
+        elif x < 0:
+            x += self.cols
+
+        if y > self.rows:
+            y -= self.rows
+        elif y < 0:
+            y += self.rows
+
+        self.display[x + (y * self.cols)] ^= 1 # set the pixel
+        return self.display[x + (y * self.cols)] != 1 # pixel was already set
+
+
+    def clear(self):
+        self.display = [0] * self.cols * self.rows
+
+
+    # draws/updates the window
+    def render(self):
+        backgroundColor = (0, 0, 0) # black
+        self.window.fill(backgroundColor)
+
+        for i in range(self.cols * self.rows):
+            x = (i % self.cols) * self.scale
+            y = math.floor(i / self.cols) * self.scale
+
+            if self.display[i] == 1:
+                pixelColor = (255, 255, 255)
+                rect = pygame.Rect(x, y, self.scale, self.scale)
+                pygame.draw.rect(self.window, pixelColor, rect)
+        pygame.display.flip()
+
+
+    def testRender(self):
+        self.setPixel(0, 0)
+        self.setPixel(4, 4)
+        self.render()
+
+
 
 class Chip8:
 
-
-    def __init__(self):
+    def __init__(self, renderer):
         self.memory = bytearray(4096) # 4096 byte memory
         self.v = bytearray(16) # 16 8-bit registers 
         self.index = 0
@@ -19,7 +75,7 @@ class Chip8:
         self.delayTimer = 0
         self.soundTimer = 0
         self.keyboard = None # TODO
-        self.renderer = None # TODO
+        self.renderer = renderer
         self.speaker = None # TODO
         self.paused = False
         self.speed = 10
@@ -50,22 +106,23 @@ class Chip8:
 
 
     # Loads the program into memory (program/rom should be converted to bytearray already)
-    def loadProgram(self, program):
-        for i in range(len(program)):
-            self.memory[0x200 + i] = program[i]
+    def loadProgram(self, binary):
+        # for i in range(len(program)):
+        #     self.memory[0x200 + i] = program[i]
+        self.memory[self.pc:len(binary)] = binary
     
 
     # Simulates a cycle of the Chip-8 CPU
     def cycle(self):
         for i in range(self.speed):
             if not self.paused:
-                instruction = (self.memory[self.pc] << 8 | self.memory[self.pc] + 1)
+                instruction = (self.memory[self.pc] << 8) | self.memory[self.pc + 1]
                 self.executeInstruction(instruction)
 
         if not self.paused:
             self.updateTimers()    
         # TODO make noise
-        # TODO update the screen
+        self.renderer.render()
 
     
     # TODO Tells pygame to make noise
@@ -93,8 +150,7 @@ class Chip8:
         if opcode == 0x0000:
             if instruction == 0x00E0:
                 # CLR
-                # TODO need renderer with clear command
-                dummy = 1
+                self.renderer.clear()
             elif instruction == 0x00EE:
                 # RET
                 self.pc = self.stack.pop()
@@ -186,8 +242,19 @@ class Chip8:
             self.v[x] = rand & (instruction & 0xFF)
         elif opcode == 0xD000:
             # DRW Vx, Vy, nibble
-            # TODO needs renderer
-            dummy = 1
+            width = 8
+            height = instruction & 0xF
+
+            self.v[0xF] = 0
+
+            for row in range(height):
+                sprite = self.memory[self.index + row]
+
+                for col in range(width):
+                    if (sprite & 0x80) > 0:
+                        if self.renderer.setPixel(self.v[x] + col, self.v[y] + row):
+                            self.v[0xF] = 1
+                    sprite <<= 1
         elif opcode == 0xE000:
             if (instruction & 0xFF) == 0x9E:
                 # SKP Vx
@@ -239,3 +306,15 @@ class Chip8:
             sys.exit('Bad instruction: ' + str(instruction))
 
 
+renderer = Renderer()
+chip8 = Chip8(renderer)
+FPS = 60
+clock = pygame.time.Clock()
+chip8.loadSprites()
+
+binary = bytearray(open('./rom/PICTURE', 'rb').read())
+chip8.loadProgram(binary)
+
+while True:
+    clock.tick(60)
+    chip8.cycle()
