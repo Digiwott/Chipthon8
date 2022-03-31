@@ -11,7 +11,7 @@ class Renderer:
         self.rows = 32
 
         # screen info and scale
-        self.display = [0] * self.cols * self.rows
+        self.display = [0] * (self.cols * self.rows)
         self.scale = 15
 
         # window
@@ -23,15 +23,16 @@ class Renderer:
     
     # sets a pixel on the display and returns if that pixel was already set or not
     def setPixel(self, x, y):
-        if x > self.cols:
-            x -= self.cols
+        # ignore invalid coordinates
+        if x >= self.cols:
+            return
         elif x < 0:
-            x += self.cols
+            return
 
-        if y > self.rows:
-            y -= self.rows
+        if y >= self.rows:
+            return
         elif y < 0:
-            y += self.rows
+            return
 
         self.display[x + (y * self.cols)] ^= 1 # set the pixel
         return self.display[x + (y * self.cols)] != 1 # pixel was already set
@@ -57,9 +58,90 @@ class Renderer:
         pygame.display.flip()
 
 
+class Keyboard:
+
+    def __init__(self):
+        self.keymap = {
+            pygame.K_1: 0x1, # 1 1
+            pygame.K_2: 0x2, # 2 2
+            pygame.K_3: 0x3, # 3 3
+            pygame.K_4: 0xC, # 4 C
+            pygame.K_q: 0x4, # Q 4
+            pygame.K_w: 0x5, # W 5
+            pygame.K_e: 0x6, # E 6
+            pygame.K_r: 0xD, # R D
+            pygame.K_a: 0x7, # A 7
+            pygame.K_s: 0x8, # S 8
+            pygame.K_d: 0x9, # D 9
+            pygame.K_f: 0xE, # F E
+            pygame.K_z: 0xA, # Z A
+            pygame.K_x: 0x0, # X 0 
+            pygame.K_c: 0xB, # C B
+            pygame.K_v: 0xF  # V F
+        }
+
+        self.keysPressed = {
+            0x1: False,
+            0x2: False,
+            0x3: False,
+            0xC: False,
+            0x4: False,
+            0x5: False,
+            0x6: False,
+            0xD: False,
+            0x7: False,
+            0x8: False,
+            0x9: False,
+            0xE: False,
+            0xA: False,
+            0x0: False,
+            0xB: False,
+            0xF: False
+        }
+        self.onNextKeyPress = None
+
+
+    def isKeyPressed(self, keyCode):
+        return self.keysPressed[keyCode]
+
+
+    def onKeyDown(self, event):
+        if self.keymap.get(event.key, 0xFF) == 0xFF:
+            return # key does not exist in known keys 
+        key = self.keymap[event.key]
+        self.keysPressed[key] = True
+
+        if self.onNextKeyPress is not None and key:
+            self.onNextKeyPress(key)
+            self.onNextKeyPress = None
+
+
+    def onKeyUp(self, event):
+        if self.keymap.get(event.key, 0xFF) == 0xFF:
+            return # key does not exist in known keys 
+        key = self.keymap[event.key]
+        self.keysPressed[key] = False
+
+
+class Speaker:
+
+    def __init__(self, file):
+        pygame.mixer.init()
+        pygame.mixer.music.load(file)
+
+
+    def play(self):
+        pygame.mixer.music.play(-1)
+
+
+    def stop(self):
+        pygame.mixer.music.stop()
+
+
+
 class Chip8:
 
-    def __init__(self, renderer):
+    def __init__(self, renderer, keyboard, speaker):
         self.memory = bytearray(4096) # 4096 byte memory
         self.v = bytearray(16) # 16 8-bit registers 
         self.index = 0
@@ -67,9 +149,9 @@ class Chip8:
         self.stack = []
         self.delayTimer = 0
         self.soundTimer = 0
-        self.keyboard = None # TODO
+        self.keyboard = keyboard
         self.renderer = renderer
-        self.speaker = None # TODO
+        self.speaker = speaker
         self.paused = False
         self.speed = 10
 
@@ -114,13 +196,16 @@ class Chip8:
 
         if not self.paused:
             self.updateTimers()    
-        # TODO make noise
+        self.sound()
         self.renderer.render()
 
     
-    # TODO Tells pygame to make noise
+    # Tells pygame to make noise
     def sound(self):
-        print('sound')
+        if self.soundTimer > 0:
+            self.speaker.play()
+        else:
+            self.speaker.stop()
 
 
     # Update timers every cycle
@@ -173,7 +258,7 @@ class Chip8:
             self.v[x] = instruction & 0xFF
         elif opcode == 0x7000:
             # ADD Vx, byte
-            self.v[x] += instruction & 0xFF
+            self.v[x] = (self.v[x] + (instruction & 0xFF)) & 0xFF
         elif opcode == 0x8000:
             nibble = instruction & 0xF
             if nibble == 0x0:
@@ -196,13 +281,13 @@ class Chip8:
 
                 if sum > 0xFF:
                     self.v[0xF] = 1
-                self.v[x] = sum
+                self.v[x] = sum & 0xFF
             elif nibble == 0x5:
                 # SUB Vx, Vy
                 self.v[0xF] = 0
                 if self.v[x] > self.v[y]:
                     self.v[0xF] = 1
-                self.v[x] -= self.v[y]
+                self.v[x] = (self.v[x] - self.v[y]) & 0xFF
             elif nibble == 0x6:
                 # SHR Vx {, Vy}
                 self.v[0xF] = self.v[x] & 0x1
@@ -212,11 +297,11 @@ class Chip8:
                 self.v[0xF] = 0
                 if self.v[y] > self.v[x]:
                     self.v[0xF] = 1
-                self.v[x] = (self.v[y] - self.v[x])
+                self.v[x] = (self.v[y] - self.v[x]) & 0xFF
             elif nibble == 0xE:
                 # SHL Vx, Vy
                 self.v[0xF] = self.v[x] & 0x80
-                self.v[x] <<= 1 
+                self.v[x] = (self.v[x] << 1) & 0xFF
             else:
                 sys.exit('Bad instruction: ' + str(instruction))
         elif opcode == 0x9000:
@@ -251,12 +336,12 @@ class Chip8:
         elif opcode == 0xE000:
             if (instruction & 0xFF) == 0x9E:
                 # SKP Vx
-                # TODO needs keyboard
-                dummy = 1
+                if self.keyboard.isKeyPressed(self.v[x]):
+                    self.pc += 2
             elif (instruction & 0xFF) == 0xA1:
                 # SKNP Vx
-                # TODO needs keyboard
-                dummy =1
+                if not self.keyboard.isKeyPressed(self.v[x]):
+                    self.pc += 2
             else:
                 sys.exit('Bad instruction: ' + str(instruction))
         elif opcode == 0xF000:
@@ -266,8 +351,15 @@ class Chip8:
                 self.v[x] = self.delayTimer
             elif byte == 0x0A:
                 # LD Vx, K
-                # TODO needs keyboard
-                dummy = 1
+                # To be honest, this opcode probably doesn't even work
+                # but no game has crashed so I'll just leave it until it crashes
+                self.paused = True
+
+                def func(key):
+                    self.v[x] = key
+                    self.paused = False
+
+                self.keyboard.onNextKeyPress = func
             elif byte == 0x15:
                 # LD DT, Vx
                 self.delayTimer = self.v[x]
@@ -300,14 +392,25 @@ class Chip8:
 
 
 renderer = Renderer()
-chip8 = Chip8(renderer)
-FPS = 60
+keyboard = Keyboard()
+speaker = Speaker('tone.wav')
+chip8 = Chip8(renderer, keyboard, speaker)
 clock = pygame.time.Clock()
 chip8.loadSprites()
 
-binary = bytearray(open('./rom/PICTURE', 'rb').read())
+binary = bytearray(open('./rom/SPACE-INVADER', 'rb').read())
 chip8.loadProgram(binary)
 
 while True:
-    clock.tick(60)
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            sys.exit('Goodbye!')
+        elif event.type == pygame.KEYDOWN:
+            keyboard.onKeyDown(event)
+            if event.key == pygame.K_ESCAPE:
+                pygame.quit()
+        elif event.type == pygame.KEYUP:
+            keyboard.onKeyUp(event)
+
+    clock.tick(200)
     chip8.cycle()
