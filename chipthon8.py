@@ -1,6 +1,7 @@
 import math
 import random
 import sys
+from time import sleep
 import pygame
 
 class Renderer:
@@ -153,7 +154,7 @@ class Chip8:
         self.renderer = renderer
         self.speaker = speaker
         self.paused = False
-        self.speed = 10
+        self.speed = 10 # cycles per frame
 
 
     # Should be ran when starting the emulator, this loads the built-in sprites into beginning of memory
@@ -197,7 +198,7 @@ class Chip8:
         if not self.paused:
             self.updateTimers()    
         self.sound()
-        self.renderer.render()
+        #self.renderer.render()
 
     
     # Tells pygame to make noise
@@ -402,6 +403,7 @@ if len(sys.argv) < 2:
     sys.exit('Please specify a rom file.')
 binary = bytearray(open(sys.argv[1], 'rb').read())
 chip8.loadProgram(binary)
+pygame.display.set_caption('Chipthon8 - ROM File: ' + sys.argv[1])
 
 running = True
 while running:
@@ -415,8 +417,9 @@ while running:
         elif event.type == pygame.KEYUP:
             keyboard.onKeyUp(event)
 
-    clock.tick(200)
+    clock.tick(60) # no more than 60 FPS
     chip8.cycle()
+    renderer.render()
 
 pygame.quit()
 sys.exit('Goodbye!')
