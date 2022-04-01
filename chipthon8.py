@@ -398,17 +398,22 @@ chip8 = Chip8(renderer, keyboard, speaker)
 clock = pygame.time.Clock()
 chip8.loadSprites()
 
-binary = bytearray(open('./rom/SPACE-INVADER', 'rb').read())
+if len(sys.argv) < 2:
+    sys.exit('Please specify a rom file.')
+binary = bytearray(open(sys.argv[1], 'rb').read())
 chip8.loadProgram(binary)
 
-while True:
+running = True
+while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
+            pygame.quit()
             sys.exit('Goodbye!')
         elif event.type == pygame.KEYDOWN:
             keyboard.onKeyDown(event)
             if event.key == pygame.K_ESCAPE:
-                pygame.quit()
+                running = False
+                sys.exit('Goodbye!')
         elif event.type == pygame.KEYUP:
             keyboard.onKeyUp(event)
 
