@@ -407,15 +407,16 @@ running = True
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
-            pygame.quit()
             sys.exit('Goodbye!')
         elif event.type == pygame.KEYDOWN:
             keyboard.onKeyDown(event)
             if event.key == pygame.K_ESCAPE:
                 running = False
-                sys.exit('Goodbye!')
         elif event.type == pygame.KEYUP:
             keyboard.onKeyUp(event)
 
     clock.tick(200)
     chip8.cycle()
+
+pygame.quit()
+sys.exit('Goodbye!')
